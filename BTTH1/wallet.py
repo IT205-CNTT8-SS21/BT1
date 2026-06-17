@@ -1,7 +1,7 @@
 import logging
 import os
 
-# Cấu hình logging theo định dạng yêu cầu
+# Cấu hình logging theo đúng định dạng yêu cầu của đề bài
 logging.basicConfig(
     filename="momo_transactions.log",
     level=logging.INFO,
@@ -21,76 +21,60 @@ class InsufficientBalanceError(Exception):
     pass
 
 
-class Wallet:
-    """Lớp quản lý số dư và các giao dịch của Ví MoMo."""
+def deposit(wallet: dict, amount: float):
+    """Nạp tiền vào ví.
 
-    def __init__(self):
-        """Khởi tạo ví với số dư mặc định là 0 VNĐ."""
-        self._balance = 0
+    Args:
+        wallet (dict): Lịch sử và thông tin ví hiện tại.
+        amount (float): Số tiền cần nạp.
+    """
+    if amount <= 0:
+        logging.error(
+            f"InvalidAmountError: Attempted to process {amount} VND."
+        )
+        raise InvalidAmountError("Số tiền giao dịch phải lớn hơn 0.")
 
-    @property
-    def balance(self):
-        """Lấy số dư hiện tại của ví."""
-        return self._balance
+    wallet["balance"] += amount
+    logging.info(
+        f"Deposit successful: +{amount} VND. "
+        f"Current Balance: {wallet['balance']}"
+    )
 
-    def deposit(self, amount: float):
-        """Nạp tiền vào ví.
 
-        Args:
-            amount (float): Số tiền cần nạp.
+def transfer(wallet: dict, phone: str, amount: float):
+    """Chuyển tiền tới số điện thoại khác.
 
-        Raises:
-            InvalidAmountError: Nếu số tiền nạp <= 0.
-        """
-        if amount <= 0:
-            logging.error(
-                f"InvalidAmountError: Attempted to process {amount} VND."
-            )
-            raise InvalidAmountError("Số tiền giao dịch phải lớn hơn 0.")
+    Args:
+        wallet (dict): Thông tin ví người gửi.
+        phone (str): Số điện thoại người nhận.
+        amount (float): Số tiền cần chuyển.
+    """
+    if amount <= 0:
+        logging.error(
+            f"InvalidAmountError: Attempted to process {amount} VND."
+        )
+        raise InvalidAmountError("Số tiền giao dịch phải lớn hơn 0.")
 
-        self._balance += amount
-        logging.info(
-            f"Deposit successful: +{amount} VND. "
-            f"Current Balance: {self._balance}"
+    if amount > wallet["balance"]:
+        logging.error(
+            f"InsufficientBalanceError: Attempted to transfer "
+            f"{amount} VND with balance {wallet['balance']} VND."
+        )
+        raise InsufficientBalanceError(
+            "Giao dịch thất bại: Số dư của bạn không đủ."
         )
 
-    def transfer(self, phone: str, amount: float):
-        """Chuyển tiền tới số điện thoại khác.
-
-        Args:
-            phone (str): Số điện thoại người nhận (10 chữ số).
-            amount (float): Số tiền cần chuyển.
-
-        Raises:
-            InvalidAmountError: Nếu số tiền chuyển <= 0.
-            InsufficientBalanceError: Nếu số tiền chuyển vượt quá số dư.
-        """
-        if amount <= 0:
-            logging.error(
-                f"InvalidAmountError: Attempted to process {amount} VND."
-            )
-            raise InvalidAmountError("Số tiền giao dịch phải lớn hơn 0.")
-
-        if amount > self._balance:
-            logging.error(
-                f"InsufficientBalanceError: Attempted to transfer "
-                f"{amount} VND with balance {self._balance} VND."
-            )
-            raise InsufficientBalanceError(
-                "Giao dịch thất bại: Số dư của bạn không đủ."
-            )
-
-        # Cảnh báo giao dịch giá trị cao từ 10,000,000 VND
-        if amount >= 10000000:
-            logging.warning(
-                f"High value transaction detected: {amount} VND to {phone}"
-            )
-
-        self._balance -= amount
-        logging.info(
-            f"Transfer successful: -{amount} VND to {phone}. "
-            f"Current Balance: {self._balance}"
+    # Cảnh báo giao dịch giá trị cao từ 10,000,000 VND
+    if amount >= 10000000:
+        logging.warning(
+            f"High value transaction detected: {amount} VND to {phone}"
         )
+
+    wallet["balance"] -= amount
+    logging.info(
+        f"Transfer successful: -{amount} VND to {phone}. "
+        f"Current Balance: {wallet['balance']}"
+    )
 
 
 def display_menu():
@@ -104,14 +88,14 @@ def display_menu():
     print("===============================================")
 
 
-def handle_deposit(wallet: Wallet):
+def handle_deposit(wallet: dict):
     """Xử lý luồng nghiệp vụ nạp tiền."""
     print("\n--- NẠP TIỀN VÀO VÍ ---")
     try:
         amount = float(input("Nhập số tiền cần nạp: "))
-        wallet.deposit(amount)
+        deposit(wallet, amount)
         print(f"\nNạp tiền thành công: +{amount:,.0f} VND")
-        print(f"Số dư hiện tại: {wallet.balance:,.0f} VND")
+        print(f"Số dư hiện tại: {wallet['balance']:,.0f} VND")
     except ValueError:
         logging.error("ValueError: Invalid numeric input for deposit.")
         print("\nLỗi: Vui lòng nhập số tiền hợp lệ.")
@@ -119,7 +103,7 @@ def handle_deposit(wallet: Wallet):
         print(f"\nLỗi: {e}")
 
 
-def handle_transfer(wallet: Wallet):
+def handle_transfer(wallet: dict):
     """Xử lý luồng nghiệp vụ chuyển tiền."""
     print("\n--- CHUYỂN TIỀN ---")
     phone = input("Nhập số điện thoại người nhận: ").strip()
@@ -130,17 +114,17 @@ def handle_transfer(wallet: Wallet):
 
     try:
         amount = float(input("Nhập số tiền cần chuyển: "))
-        wallet.transfer(phone, amount)
+        transfer(wallet, phone, amount)
         print(f"\nChuyển tiền thành công tới số điện thoại {phone}.")
         print(f"Số tiền đã chuyển: {amount:,.0f} VND")
-        print(f"Số dư còn lại: {wallet.balance:,.0f} VND")
+        print(f"Số dư còn lại: {wallet['balance']:,.0f} VND")
     except ValueError:
         logging.error("ValueError: Invalid numeric input for transfer.")
         print("\nLỗi: Vui lòng nhập số tiền hợp lệ.")
     except (InvalidAmountError, InsufficientBalanceError) as e:
         print(f"\n{e}")
         if isinstance(e, InsufficientBalanceError):
-            print(f"Số dư hiện tại: {wallet.balance:,.0f} VND")
+            print(f"Số dư hiện tại: {wallet['balance']:,.0f} VND")
 
 
 def handle_show_logs():
@@ -155,16 +139,17 @@ def handle_show_logs():
         print(file.read().strip())
 
 
-def handle_check_balance(wallet: Wallet):
+def handle_check_balance(wallet: dict):
     """Xử lý nghiệp vụ xem số dư hiện tại."""
     print("\n--- SỐ DƯ VÍ MOMO ---")
-    print(f"Số dư hiện tại: {wallet.balance:,.0f} VND")
-    logging.info(f"Balance checked. Current Balance: {wallet.balance}")
+    print(f"Số dư hiện tại: {wallet['balance']:,.0f} VND")
+    logging.info(f"Balance checked. Current Balance: {wallet['balance']}")
 
 
 def main():
     """Hàm khởi chạy chính điều hướng ứng dụng CLI."""
-    wallet = Wallet()
+    # Dùng Dictionary đại diện cho Ví (Đúng kiến thức Session 11-12)
+    wallet = {"balance": 0.0}
 
     while True:
         display_menu()
